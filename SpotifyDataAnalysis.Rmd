@@ -1,0 +1,275 @@
+---
+title: "Spotify Data Analysis"
+author: "Darren"
+date: "2023-10-20"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+Identifying Trends Within Chart-topping Spotify Songs
+
+# Install Packages
+
+```{r Packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(cluster)
+```
+
+# Read Data and Quick Overview
+
+```{r message=FALSE}
+Spotify <- read.csv("top10s.csv")
+summary(Spotify)
+```
+
+# Display Genre Distribution
+Output a table of the Genre and separate the 
+
+```{r}
+table(Spotify$top.genre)
+
+Spotify <- Spotify %>%
+  separate(top.genre, c("variable", "genre"), extra = "merge")
+```
+
+Group and simplify genres
+
+```{r}
+other <- c("complextro","downtempo","brostep","electro","electronic","escape","folk-pop","hollywood","house","irish","permanent","neo","metropolis","tropical")
+Spotify$genre[Spotify$variable %in% "other"] <- "Other"
+Spotify$genre[Spotify$variable == "hip"] <- "hip hop"
+Spotify$genre[Spotify$variable == "latin"] <- "latin"
+Spotify$genre[Spotify$variable == "boy"]  <- "pop"
+Spotify$genre[Spotify$variable == "french"]  <- "pop"
+Spotify$genre[Spotify$variable == "electropop"]  <- "pop"
+Spotify$genre[Spotify$variable == "pop"]  <- "pop"
+Spotify$genre[Spotify$genre == "contemporary r&b"] <- "r&b"
+Spotify$genre[Spotify$genre == "room"] <- "Other"
+table(Spotify$genre)
+
+miss <- colSums(is.na(Spotify))
+print(miss[miss>0])
+
+Spotify <-na.omit(Spotify)
+```
+
+# Data Exploration
+Questions: 
+1. Which artist has the most popular song from 2010 to 2019?
+According to the code, the most popular song from 2010 to 2019 is "Memories by Maroon 5."
+2. Which artist has the most popular songs from 2010 to 2019?
+According to the graph, the artist with the most popular songs from 2010 to 2019 is Katy Perry with 17.
+3. Which artist has the most popular songs within 2019?
+According to the graph, the artist with the most popular songs within 2019 is Ed Sheeran with 5.
+
+```{r}
+mostPopular <- Spotify %>%
+  arrange(desc(pop)) %>%
+  group_by(artist)
+mostPopular
+
+mostPopularPlot <- mostPopular %>%
+  filter(year == 2019) %>%
+  count(artist) %>%
+  ggplot(aes(x = reorder(artist, n), y = n)) + geom_col(fill = "blue") + coord_flip() + labs(title = "# of songs in 2019 by artist", x = "Artists", y = "# of songs (2019)")
+mostPopularPlot
+
+mostPopularArtist <- mostPopular %>%
+  count(artist) %>%
+  arrange(desc(n))
+  
+mostPopularArtistPlot <- mostPopularArtist %>%
+  head(15) %>%
+  ggplot(aes(x = reorder(artist, n), y = n)) + geom_col(fill = "blue") + coord_flip() + labs(title = "Artists with the most # of songs", x = "Artists", y = "# of songs (2010 - 2019)")
+mostPopularArtistPlot
+```
+
+# Measure Analysis
+
+1. Duration Analysis
+Most songs have a duration between 3-4 minutes. 
+Many outliers in the pop genre, so we look at min/max duration
+The shortest song is "Mark My Words by Justin Bieber" at 134 seconds and the longest song is "TKO by Justin Timberlake" at 424 seconds.
+Both are coincidentally by Justins.
+
+```{r}
+durationPlot <- Spotify %>%
+  ggplot(aes(x = reorder(genre, dur), y = dur)) + geom_boxplot(fill = "blue") + labs(title = "Song Duration", x = "Genre", y = "Duration") + theme_light()
+durationPlot
+
+popdf <- Spotify %>%
+  filter(genre == "pop")
+
+Q1 <- summary(popdf$dur)[2]
+Q3 <- summary(popdf$dur)[4]
+
+highOutlier <- popdf %>%
+  filter(dur > Q3 + 1.5 * IQR(dur)) %>%
+  arrange(desc(dur)) %>%
+  select(artist, title, dur)
+highOutlier
+
+lowOutlier <- popdf %>%
+  filter(dur < Q1 - 1.5 * IQR(dur)) %>%
+  select(artist, title, dur)
+lowOutlier
+
+max <- popdf %>%
+  filter(dur == max(dur)) %>%
+  select(artist, title, dur)
+max
+
+min <- popdf %>%
+  filter(dur == min(dur)) %>%
+  select(artist, title, dur)
+min
+```
+
+2. BPM Analysis
+Most songs tend to be between 100 to 150 bpm, but there are a few outliers that are above 200 bpm.
+These include: "How Ya Doin'? by Little Mix,"	"L.A LOVE (la la) by Fergie," and "FourFiveSeconds by Rihanna."
+
+```{r}
+bpm <- Spotify %>%
+  ggplot(aes(x = reorder(genre, bpm), y = bpm)) + geom_boxplot(fill = "blue") + labs(title = "Song BPM", x = "Genre", y = "BPM") + theme_light()
+bpm
+
+bpmMax <- Spotify %>%
+  filter(bpm >= 200) %>%
+  select(artist, title, bpm)
+bpmMax
+```
+
+3. Energy Analysis
+From the data, we can see that pop, dance, latin, trap, house, rock, and others all have a median above 75 energy rating, meaning that those genres tend to have a higher energy. Next we can find the artists that have the highest energy which are: Martin Solveig and the Jonas Brothers at 98.
+
+```{r}
+energy <- Spotify %>%
+  ggplot(aes(x = reorder(genre, nrgy), y = nrgy)) + geom_boxplot(fill = "blue") + labs(title = "Song Energy", x = "Genre", y = "Energy") + theme_light()
+energy
+
+mostEnergy <- Spotify %>%
+  arrange(desc(nrgy)) %>%
+  select(artist, title, nrgy)
+mostEnergy
+
+artistEnergy <- mostEnergy %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(artist, nrgy), y = nrgy)) + geom_boxplot(fill = "blue") + labs(title = "Energy by Artist", x = "Artist", y = "Energy") + coord_flip() + theme_light()
+artistEnergy
+```
+
+4. Danceability Analysis
+Using the graph, we can observe that latin and trap have the highest danceability scores with a meidian at about 75. We can also see that the two songs with the highest danceability of 97 are "Bad Liar by Imagine Dragons" and "Drip by Cardi B." Finally the artist with the highest danceability is Selena Gomez.
+
+```{r}
+danceability <- Spotify %>%
+  ggplot(aes(x = reorder(genre, dnce), y = dnce)) + geom_boxplot(fill = "blue") + labs(title = "Danceability by Genre", x = "Genre", y = "Danceability") + theme_light()
+danceability
+  
+mostDanceable <- Spotify %>%
+  arrange((desc(dnce))) %>%
+  select(artist, title, dnce)
+mostDanceable
+
+artistDanceability <- mostDanceable %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(artist, dnce), y = dnce)) + geom_boxplot(fill = "blue") + labs(title = "Danceability by Artist", x = "Artist", y = "Danceability") + coord_flip() + theme_light()
+artistDanceability
+```
+
+5. Positivity Analysis
+The genre with the highest median positivity is Latin but the songs with the highest positivity are: "Mmm Yeah by Austin Mahone" and "There's Nothing Holdin' Me Back."
+
+```{r}
+positivity <- Spotify %>%
+  filter(!dB == -60) %>%
+  ggplot(aes(x = reorder(genre, val), y = val)) + geom_boxplot(fill = "blue") + labs(title = "Positivity by Genre", x = "Artist", y = "Positivity") + theme_light()
+positivity
+
+mostPositivity <- Spotify %>%
+  arrange(desc(val)) %>%
+  select(artist, title, val)
+mostPositivity
+
+artistValue <- mostPositivity %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(artist, val), y = val)) + geom_boxplot(fill = "blue") + labs(title = "Positivity by Artist", x = "Artist", y = "Positivity") + coord_flip() + theme_light()
+artistValue
+```
+
+6. Speech Analysis
+Before running the code, my guess is that Rap will have the highest median speech value. Running the code confirms this.
+
+```{r}
+speech <- Spotify %>%
+  ggplot(aes(x = reorder(genre, spch), y = spch)) + geom_boxplot(fill = "blue") + labs(title = "Speech by Genre", x = "Genre", y = "Speech") + coord_flip() + theme_light()
+speech
+```
+
+# Hypothesis Testing
+Testing the relationship between different variables.
+
+1. Relationship between bpm and energy by genre, higher bpm leads to higher energy
+From the graph and the correlation calculation, we can see that the correlation is weak (0.13),
+meaning that there is not a strong correlation between the two variables.
+```{r}
+bpm_energy <- Spotify %>%
+  ggplot(aes(x = bpm, y = nrgy)) + geom_point() + labs(title = "BPM vs. Energy", x = "BPM", y = "Energy") + theme_light() + geom_smooth(se = FALSE)
+bpm_energy
+
+cor(Spotify$bpm, Spotify$nrgy)
+```
+
+2. Relationship betwen energy and positivity by genre, higher energy leads to higher positivity
+From the graph and the correlation calculation, we can see that the correlation is fairly strong (0.42),
+meaning that there is some correlation between the two variables.
+```{r}
+energy_positivity <- Spotify %>%
+  ggplot(aes(x = nrgy, y = val)) + geom_point() + labs(title = "Energy vs. Positivity", x = "Energy", y = "Positivity") + theme_light() + geom_smooth(se = FALSE)
+energy_positivity
+
+cor(Spotify$nrgy, Spotify$val)
+```
+
+3. Relationship between bpm and danceability, higher bpm leads to higher danceability
+Surprisingly, the graph and correlation show that bpm and danceability have a negative correlation (-0.12).
+
+```{r}
+bpm_danceability <- Spotify %>%
+  ggplot(aes(x = bpm, y = dnce)) + geom_point() + labs(title = "BPM vs. Danceability", x = "BPM", y = "Danceability") + theme_light() + geom_smooth(se = FALSE)
+bpm_danceability
+
+cor(Spotify$bpm, Spotify$dnce)
+```
+
+4. Relationship between acoustic and speech, no expectation just testing
+Very low correlation between acoustic and speech, almost (0.0)
+```{r}
+acoustic_speech <- Spotify %>%
+  ggplot(aes(x = acous, y = spch)) + geom_point() + labs(title = "Acoustic vs. Speech", x = "Acoustic", y = "Speech") + theme_light() + geom_smooth(se = FALSE)
+acoustic_speech
+
+cor(Spotify$acous, Spotify$spch)
+```
+
+# Summary
+
+Some takeaways:
+1. Maroon 5 is the artist with the most popular song "Memories" from 2010 to 2019 with a score of 99.
+2. Katy Perry is the artist with the most chart topping songs from 2010 to 2019 with 17.
+3. Ed Sheeran is the artist with the most chart topping songs within 2019 with 5.
+4. The longest song is "TKO" by Justin Timberlake (424 s) and the shortest song is "Mark My Words" by Justin Bieber (134 s).
+5."Hello" by Martin Solveig and "Pom Poms" by the Jonas Brothers are the songs with the highest energy at 98. The genres are Latin, Dance, and Rock.
+6. "Bad Liar" by Imagine Dragons and "Drip" by Cardi B are the songs with the highest danceability at 97. The genres are Latin, Trap, and EDM.
+7. There is correlation between positivity and energy (0.42), the higher the positivity, the higher the energy. The genres showing this are EDM, Rock, and Latin.
+8. There is not correlation between acoustic and speech, meaning that the two categories are completely unrelated.
+9. The next time I have the urge to dance, I will listen to Latin, Trap, or EDM.
